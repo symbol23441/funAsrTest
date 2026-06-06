@@ -1,289 +1,114 @@
 # SenseVoice 本地语音转文字工具
 
-基于 FunASR + SenseVoice 实现的本地离线语音识别工具。
+基于 FunASR + SenseVoice 的本地离线 ASR 转写脚本，支持单文件和目录批量转写。
 
-支持：
+## 功能
 
-* 单个音频文件转写
-* 目录递归批量转写
-* 自动识别音频时长
-* 长音频自动启用 VAD
-* 保持目录结构输出
-* 本地运行，无需上传云端
-* Apple Silicon（M1/M2/M3/M4）支持
+- 单个音频文件转写
+- 目录递归批量转写
+- 自动根据音频时长选择普通模型或 VAD 模型
+- 输出目录可配置，默认 `out/`
+- 目录输入时保持原目录结构
+- 默认按句末标点换行，可手动关闭
+- 自动清理 SenseVoice 元标签
 
----
+## 环境准备
 
-# 项目依赖
-
-## FunASR
-
-GitHub：
-
-https://github.com/modelscope/FunASR
-
-官方文档：
-
-https://github.com/modelscope/FunASR/blob/main/README.md
-
-## SenseVoice
-
-GitHub：
-
-https://github.com/FunAudioLLM/SenseVoice
-
-论文：
-
-https://arxiv.org/abs/2407.05642
-
----
-
-# 环境准备
-
-推荐：
-
-* macOS
-* Apple Silicon（M1/M2/M3/M4）
-* Python 3.10
-
-## 创建 Conda 环境
+建议使用 Python 3.10。
 
 ```bash
 conda create --name funASR python=3.10
-```
-
-激活环境：
-
-```bash
 conda activate funASR
-```
-
----
-
-# 安装依赖
-
-安装 FunASR：
-
-```bash
-pip install -U funasr
-```
-
-安装 PyTorch：
-
-```bash
-pip install torch torchaudio
-```
-
-安装 ffmpeg：
-
-```bash
+pip install -U funasr torch torchaudio
 brew install ffmpeg
 ```
 
-验证：
+验证 `ffmpeg` / `ffprobe`：
 
 ```bash
 ffmpeg -version
 ffprobe -version
 ```
 
----
+## 使用方法
 
-# 项目目录
-
-```text
-funASR/
-├── asr.py
-├── README.md
-└── out/
-```
-
-创建项目目录：
+查看帮助：
 
 ```bash
-mkdir funASR
-cd funASR
+python asr.py
+python asr.py --help
 ```
 
-使用 VSCode 打开：
-
-```bash
-code .
-```
-
----
-
-# 使用方法
-
-## 转写单个文件
+转写单个文件：
 
 ```bash
 python asr.py audio.mp3
 ```
 
-示例：
+转写目录：
 
 ```bash
-python asr.py lecture.mp3
+python asr.py ./audio_dir
 ```
 
-输出：
+指定输出目录：
+
+```bash
+python asr.py ./audio_dir -o ./transcripts
+python asr.py ./audio_dir --output-dir ./transcripts
+```
+
+关闭句末标点换行：
+
+```bash
+python asr.py audio.mp3 --no-period-newline
+```
+
+组合使用：
+
+```bash
+python asr.py ./audio_dir -o ./transcripts --no-period-newline
+```
+
+## 参数说明
+
+```text
+usage: asr.py [-h] [-o DIR] [--no-period-newline] INPUT
+
+positional arguments:
+  INPUT                      输入路径：音频文件或音频目录。目录会递归扫描支持格式。
+
+options:
+  -h, --help                 显示帮助信息并退出
+  -o, --output-dir DIR       转写结果输出目录。默认: out
+  --no-period-newline        关闭按句末标点换行。默认开启，支持标点: 。 . ！ ! ？ ?。
+```
+
+## 支持格式
+
+`.wav` `.mp3` `.m4a` `.aac` `.flac` `.ogg` `.wma` `.opus`
+
+## 输出说明
+
+默认输出到 `out/`：
 
 ```text
 out/
-└── lecture.txt
-```
-
----
-
-## 转写整个目录
-
-```bash
-python asr.py ./audio
-```
-
-示例：
-
-```bash
-python asr.py /Users/shenbo/Downloads/Bilidown_download
-```
-
-输出：
-
-```text
-out/
-├── video1.txt
-├── video2.txt
+├── audio.txt
 └── subdir/
-    └── video3.txt
+    └── video.txt
 ```
 
-目录结构会自动保持一致。
+输入为目录时，输出目录会保持输入目录下的相对结构。
 
----
+## 模型选择
 
-# 自动模式说明
+脚本会自动检测音频时长：
 
-脚本会自动检测音频时长。
+- `<= 5 分钟`：使用 SenseVoiceSmall 普通模型
+- `> 5 分钟`：使用 SenseVoiceSmall + fsmn-vad
 
-## 短音频（≤ 5分钟）
+## 依赖项目
 
-使用：
-
-```python
-SenseVoiceSmall
-```
-
-特点：
-
-* 启动速度快
-* 资源占用低
-
----
-
-## 长音频（> 5分钟）
-
-使用：
-
-```python
-SenseVoiceSmall + fsmn-vad
-```
-
-特点：
-
-* 自动静音检测
-* 自动语音分段
-* 长录音识别更稳定
-
-适用于：
-
-* 会议录音
-* 播客
-* 在线课程
-* 视频字幕生成
-
----
-
-# 输出结果
-
-SenseVoice 默认会输出元标签：
-
-```text
-<|zh|><|NEUTRAL|><|Speech|><|withitn|>
-大家好
-```
-
-脚本已自动清理：
-
-```text
-大家好
-```
-
-仅保留最终识别文字。
-
----
-
-# 常见标签说明
-
-| 标签 | 含义       |    |      |
-| -- | -------- | -- | ---- |
-| `< | zh       | >` | 中文   |
-| `< | en       | >` | 英文   |
-| `< | ja       | >` | 日文   |
-| `< | Speech   | >` | 普通语音 |
-| `< | BGM      | >` | 背景音乐 |
-| `< | Applause | >` | 掌声   |
-| `< | Laughter | >` | 笑声   |
-| `< | NEUTRAL  | >` | 中性情绪 |
-| `< | HAPPY    | >` | 开心   |
-| `< | SAD      | >` | 悲伤   |
-
-当前脚本会自动移除这些标签。
-
----
-
-# 实际安装记录
-
-```bash
-conda create --name funASR python=3.10
-
-conda activate funASR
-
-pip install -U funasr
-
-pip install torch torchaudio
-
-mkdir funASR
-
-cd funASR
-
-vim transcribe.py
-
-code .
-
-python asr.py /Users/shenbo/Downloads/Bilidown_download
-```
-
----
-
-# 后续优化方向
-
-可扩展：
-
-* 输出 SRT 字幕
-* 输出 JSON 时间戳
-* 自动生成会议纪要
-* 自动章节划分
-* 对接 Ollama 本地大模型
-* 批量总结课程内容
-
----
-
-# License
-
-本项目依赖：
-
-* FunASR
-* SenseVoice
-
-请遵循其官方开源许可证使用。
+- [FunASR](https://github.com/modelscope/FunASR)
+- [SenseVoice](https://github.com/FunAudioLLM/SenseVoice)

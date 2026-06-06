@@ -11,10 +11,13 @@ SenseVoice 批量 ASR 转写工具
 使用:
     python asr.py audio.mp3
     python asr.py ./audio_dir
+    python asr.py ./audio_dir --output-dir ./transcripts
+    python asr.py audio.mp3 --no-period-newline
 
 功能:
     - 单文件或目录递归转写
-    - 输出到当前目录 out/
+    - 输出目录可配置，默认输出到当前目录 out/
+    - 默认开启每句话按句号/感叹号/问号换行，可手动关闭
     - 保持目录结构
     - 自动判断时长
     - <=5分钟: 普通模型
@@ -24,9 +27,8 @@ SenseVoice 批量 ASR 转写工具
 import argparse
 import re
 import subprocess
+import sys
 from pathlib import Path
-
-from funasr import AutoModel
 
 SUPPORTED_EXTS = {
     ".wav",
@@ -58,6 +60,20 @@ def clean_text(text: str) -> str:
     text = re.sub(
         r"\s+",
         " ",
+        text,
+    )
+
+    return text.strip()
+
+
+def add_newline_after_sentence_punctuation(text: str) -> str:
+    """
+    在句号、感叹号、问号等句末标点后换行。
+    """
+
+    text = re.sub(
+        r"([。.!！?？]+)\s*",
+        r"\1\n",
         text,
     )
 
@@ -109,13 +125,54 @@ def get_audio_files(path: Path):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="SenseVoice 批量 ASR 转写工具"
+        prog="asr.py",
+        description="SenseVoice 批量 ASR 转写工具：支持单个音频文件或目录递归转写。",
+        formatter_class=argparse.RawTextHelpFormatter,
+        epilog="""
+示例:
+  python asr.py audio.mp3
+  python asr.py ./audio_dir
+  python asr.py ./audio_dir -o ./transcripts
+  python asr.py audio.mp3 --no-period-newline
+  python asr.py ./audio_dir --output-dir ./transcripts --no-period-newline
+
+说明:
+  - 默认输出目录为当前目录下的 out/
+  - 输入为目录时会递归扫描支持的音频文件，并在输出目录中保持原目录结构
+  - 默认按句号/感叹号/问号等句末标点换行；如需关闭，请添加 --no-period-newline
+  - 自动根据音频时长选择模型：<=5分钟使用普通模型，>5分钟使用 VAD 模型
+
+支持格式:
+  .wav .mp3 .m4a .aac .flac .ogg .wma .opus
+""",
     )
 
     parser.add_argument(
         "input_path",
-        help="音频文件或目录"
+        metavar="INPUT",
+        help="输入路径：音频文件或音频目录。目录会递归扫描支持格式。",
     )
+
+    parser.add_argument(
+        "-o",
+        "--output-dir",
+        metavar="DIR",
+        default="out",
+        help="转写结果输出目录。默认: out",
+    )
+
+    parser.add_argument(
+        "--no-period-newline",
+        dest="period_newline",
+        action="store_false",
+        help="关闭按句末标点换行。默认开启，支持标点: 。 . ！ ! ？ ?。",
+    )
+
+    parser.set_defaults(period_newline=True)
+
+    if len(sys.argv) == 1:
+        parser.print_help()
+        return
 
     args = parser.parse_args()
 
@@ -124,8 +181,13 @@ def main():
     if not input_path.exists():
         raise FileNotFoundError(f"路径不存在: {input_path}")
 
-    out_root = Path.cwd() / "out"
-    out_root.mkdir(exist_ok=True)
+    out_root = Path(args.output_dir).expanduser().resolve()
+    out_root.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    from funasr import AutoModel
 
     print("=" * 60)
     print("加载 SenseVoice 普通模型...")
@@ -184,6 +246,9 @@ def main():
             raw_text = result[0]["text"]
 
             text = clean_text(raw_text)
+
+            if args.period_newline:
+                text = add_newline_after_sentence_punctuation(text)
 
             if input_path.is_file():
                 relative_path = Path(audio_file.stem + ".txt")
