@@ -22,6 +22,7 @@ SenseVoice 批量 ASR 转写工具
 """
 
 import argparse
+import re
 import subprocess
 from pathlib import Path
 
@@ -39,6 +40,28 @@ SUPPORTED_EXTS = {
 }
 
 SHORT_AUDIO_THRESHOLD = 300  # 5分钟
+
+
+def clean_text(text: str) -> str:
+    """
+    清理 SenseVoice 元标签
+    """
+
+    # 删除标签
+    text = re.sub(
+        r"<\|.*?\|>",
+        "",
+        text,
+    )
+
+    # 合并多余空白
+    text = re.sub(
+        r"\s+",
+        " ",
+        text,
+    )
+
+    return text.strip()
 
 
 def get_audio_duration(audio_file: str) -> float:
@@ -158,7 +181,9 @@ def main():
                 use_itn=True,
             )
 
-            text = result[0]["text"].strip()
+            raw_text = result[0]["text"]
+
+            text = clean_text(raw_text)
 
             if input_path.is_file():
                 relative_path = Path(audio_file.stem + ".txt")
